@@ -47,7 +47,8 @@ func (s *TradingService) GetAccountStatusWS(ctx context.Context) (interface{}, e
         return nil, fmt.Errorf("missing apiKey: set BINANCE_API_KEY or save active credentials via /api/credentials")
     }
     params["apiKey"] = apiKey
-    if err := ws.SendSignedRequest(ctx, fmt.Sprintf("status-%d", time.Now().UnixMilli()), "account.status", params, &result); err != nil {
+ 
+	if err := ws.SendSignedRequest(ctx, fmt.Sprintf("status-%d", time.Now().UnixMilli()), "account.status", params, &result); err != nil {
         return nil, err
     }
     return result, nil
@@ -71,7 +72,8 @@ func (s *TradingService) GetAccountBalanceWS(ctx context.Context) (interface{}, 
         return nil, fmt.Errorf("missing apiKey: set BINANCE_API_KEY or save active credentials via /api/credentials")
     }
     params["apiKey"] = apiKey
-    if err := ws.SendSignedRequest(ctx, fmt.Sprintf("bal-%d", time.Now().UnixMilli()), "account.balance", params, &result); err != nil {
+
+     if err := ws.SendSignedRequest(ctx, fmt.Sprintf("bal-%d", time.Now().UnixMilli()), "account.balance", params, &result); err != nil {
         return nil, err
     }
     return result, nil

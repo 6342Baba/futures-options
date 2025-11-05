@@ -3,6 +3,8 @@ package binance
 import (
 	"context"
 	"crypto/ed25519"
+    "crypto/hmac"
+    "crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -35,6 +37,9 @@ func NewWSAPIClient(cfg *config.Config) (*WSAPIClient, error) {
         url = cfg.BinanceFuturesWSAPIURLTest
     }
 
+    // Log the WS-API URL we will connect to
+    fmt.Printf("[WS-API] Connecting to: %s -- (testnet=%v)\n", url, cfg.BinanceTestnet)
+
     c, _, err := websocket.DefaultDialer.Dial(url, nil)
     if err != nil {
         return nil, fmt.Errorf("failed to connect to WebSocket API: %w", err)
@@ -51,6 +56,7 @@ func getServerTimeMs(cfg *config.Config) int64 {
         base = cfg.BinanceFuturesTestnetURL
     }
     url := strings.TrimRight(base, "/") + "/fapi/v1/time"
+    fmt.Printf("[REST] serverTime URL: %s (testnet=%v)\n", url, cfg.BinanceTestnet)
     req, err := http.NewRequest(http.MethodGet, url, nil)
     if err != nil {
         return time.Now().UnixMilli()
@@ -232,9 +238,9 @@ func (w *WSAPIClient) SendSignedRequest(ctx context.Context, id interface{}, met
         params["timestamp"] = ts
     }
     // (optional but good) add recvWindow
-    // if _, ok := params["recvWindow"]; !ok {
-    //     params["recvWindow"] = 5000
-    // }
+    if _, ok := params["recvWindow"]; !ok {
+        params["recvWindow"] = 5000
+    }
 
     payload, err := buildSignaturePayload(params)
     log.Printf("Payload: %s", payload)
@@ -242,8 +248,15 @@ func (w *WSAPIClient) SendSignedRequest(ctx context.Context, id interface{}, met
         return err
     }
 
-    sig := ed25519.Sign(priv, []byte(payload))
-    params["signature"] = base64.StdEncoding.EncodeToString(sig)
+    // Signature mode: default ed25519 (WS-API spec). If WSAPI_SIGNATURE_MODE=hmac, sign with HMAC-SHA256 (testing only)
+    if strings.EqualFold(w.cfg.WSAPISignatureMode, "hmac") {
+        mac := hmac.New(sha256.New, []byte(w.cfg.BinanceSecretKey))
+        mac.Write([]byte(payload))
+        params["signature"] = fmt.Sprintf("%x", mac.Sum(nil))
+    } else {
+        sig := ed25519.Sign(priv, []byte(payload))
+        params["signature"] = base64.StdEncoding.EncodeToString(sig)
+    }
     log.Printf("Signature params: %v", params)
     return w.SendRequest(ctx, id, method, params, out)
 }

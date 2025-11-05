@@ -16,6 +16,7 @@ type Config struct {
     BinanceFuturesWSAPIURL      string
     BinanceFuturesWSAPIURLTest  string
     Ed25519PrivateKeyPath       string
+    WSAPISignatureMode          string
 	MongoDBURI             string
 	MongoDBDatabase         string
 	Port                   string
@@ -36,6 +37,7 @@ func Load() *Config {
         BinanceFuturesWSAPIURL:      getEnv("BINANCE_FUTURES_WSAPI_URL", "wss://ws-fapi.binance.com/ws-fapi/v1"),
         BinanceFuturesWSAPIURLTest:  getEnv("BINANCE_FUTURES_WSAPI_URL_TEST", "wss://testnet.binancefuture.com/ws-fapi/v1"),
         Ed25519PrivateKeyPath:       getEnv("ED25519_PRIVATE_KEY_PATH", ""),
+        WSAPISignatureMode:          getEnv("WSAPI_SIGNATURE_MODE", "ed25519"),
 		MongoDBURI:             getEnv("MONGODB_URI", "mongodb://localhost:27017"),
 		MongoDBDatabase:         getEnv("MONGODB_DATABASE", "futures_options_db"),
 		Port:                   getEnv("PORT", "9090"),
