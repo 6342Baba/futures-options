@@ -20,7 +20,8 @@
 
 4. **Testnet Support**
    - ✅ Using Binance Futures Testnet
-   - ✅ Base URL: `https://testnet.binancefuture.com`
+   - ✅ Base URL: `https://demo-fapi.binance.com` (Official REST API testnet URL)
+   - ✅ WebSocket URL: `wss://fstream.binancefuture.com` (Official WebSocket testnet URL)
 
 ## Not Currently Implemented (But Available via Library)
 

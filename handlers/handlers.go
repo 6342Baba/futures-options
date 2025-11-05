@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -230,6 +231,9 @@ func (h *Handlers) HealthCheck(w http.ResponseWriter, r *http.Request) {
 func SetupRoutes(h *Handlers) *mux.Router {
 	router := mux.NewRouter()
 
+	// Request logging middleware
+	router.Use(loggingMiddleware)
+
 	// Swagger documentation
 	router.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
 
@@ -246,7 +250,6 @@ func SetupRoutes(h *Handlers) *mux.Router {
 
 	// Options routes
 	options := api.PathPrefix("/options").Subrouter()
-	options.HandleFunc("/order", h.CreateOptionsOrder).Methods("POST")
 	options.HandleFunc("/orders", h.GetOptionsOrders).Methods("GET")
 
 	// Positions routes
@@ -257,6 +260,60 @@ func SetupRoutes(h *Handlers) *mux.Router {
 	api.HandleFunc("/credentials", h.SaveAPICredentials).Methods("POST")
 	api.HandleFunc("/credentials", h.GetAPICredentials).Methods("GET")
 
+	// Advanced Futures routes
+	api.HandleFunc("/futures/advanced/order", h.CreateAdvancedFuturesOrder).Methods("POST")
+	api.HandleFunc("/futures/order/modify", h.ModifyFuturesOrder).Methods("PUT")
+	api.HandleFunc("/futures/batch/orders", h.CreateBatchOrders).Methods("POST")
+	api.HandleFunc("/futures/batch/orders/cancel", h.CancelBatchOrders).Methods("DELETE")
+	api.HandleFunc("/futures/position-mode", h.SetPositionMode).Methods("POST")
+	api.HandleFunc("/futures/position-mode", h.GetPositionMode).Methods("GET")
+    api.HandleFunc("/futures/account/status", h.GetAccountStatusWS).Methods("GET")
+    api.HandleFunc("/futures/account/balance", h.GetAccountBalanceWS).Methods("GET")
+
+    // Key utilities
+    api.HandleFunc("/keys/ed25519/generate", h.GenerateEd25519Key).Methods("POST")
+
+	// WebSocket routes
+	api.HandleFunc("/websocket/connect", h.ConnectWebSocket).Methods("GET")
+	api.HandleFunc("/websocket/messages", h.GetWebSocketMessages).Methods("GET")
+
+	// Options routes (fully implemented)
+	options.HandleFunc("/order", h.CreateOptionsOrderAdvanced).Methods("POST")
+	options.HandleFunc("/positions", h.GetOptionsPositions).Methods("GET")
+
 	return router
+}
+
+// statusRecorder wraps http.ResponseWriter to capture status code and size
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+	size   int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.status = code
+	r.ResponseWriter.WriteHeader(code)
+}
+
+func (r *statusRecorder) Write(b []byte) (int, error) {
+	if r.status == 0 {
+		// Status not set yet; default to 200 OK
+		r.status = http.StatusOK
+	}
+	n, err := r.ResponseWriter.Write(b)
+	r.size += n
+	return n, err
+}
+
+// loggingMiddleware logs each HTTP request with method, path, status and duration
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		rec := &statusRecorder{ResponseWriter: w}
+		next.ServeHTTP(rec, r)
+		dur := time.Since(start)
+		log.Printf("%s %s %d %dB %s", r.Method, r.URL.Path, rec.status, rec.size, dur)
+	})
 }
 

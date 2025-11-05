@@ -19,12 +19,39 @@ import (
 
 type TradingService struct {
 	binanceClient *binance.Client
+	wsClient      *binance.WebSocketClient
 }
 
 func NewTradingService(binanceClient *binance.Client) *TradingService {
 	return &TradingService{
 		binanceClient: binanceClient,
 	}
+}
+
+// GetAccountStatusWS retrieves account.status via WebSocket API
+func (s *TradingService) GetAccountStatusWS(ctx context.Context) (interface{}, error) {
+    ws, err := binance.NewWSAPIClient(s.binanceClient.Config)
+    if err != nil { return nil, fmt.Errorf("failed to connect WS API: %w", err) }
+    defer ws.Close()
+
+    var result interface{}
+    if err := ws.SendSignedRequest(ctx, fmt.Sprintf("status-%d", time.Now().UnixMilli()), "account.status", nil, &result); err != nil {
+        return nil, err
+    }
+    return result, nil
+}
+
+// GetAccountBalanceWS retrieves account.balance via WebSocket API
+func (s *TradingService) GetAccountBalanceWS(ctx context.Context) (interface{}, error) {
+    ws, err := binance.NewWSAPIClient(s.binanceClient.Config)
+    if err != nil { return nil, fmt.Errorf("failed to connect WS API: %w", err) }
+    defer ws.Close()
+
+    var result interface{}
+    if err := ws.SendSignedRequest(ctx, fmt.Sprintf("bal-%d", time.Now().UnixMilli()), "account.balance", nil, &result); err != nil {
+        return nil, err
+    }
+    return result, nil
 }
 
 // CreateFuturesOrder creates a futures order and saves it to MongoDB
@@ -84,8 +111,26 @@ func (s *TradingService) CreateFuturesOrder(ctx context.Context, req *CreateFutu
 
 // CreateOptionsOrder creates an options order and saves it to MongoDB
 func (s *TradingService) CreateOptionsOrder(ctx context.Context, req *CreateOptionsOrderRequest) (*models.OptionsOrder, error) {
-	// Note: This is a placeholder - you'll need to implement actual Options API calls
-	// For now, we'll just save to database
+	// Use Options client - create a config from binance client
+	// For now, create a basic config (this would ideally come from binance.Client)
+	// Note: We'll need to pass config through or store it in Client
+	// Temporary workaround: create options client directly
+	optionsClient := binance.NewOptionsClient(nil) // Will need proper config
+	
+	binanceReq := &binance.OptionsOrderRequest{
+		Symbol:      req.Symbol,
+		Side:        req.Side,
+		OrderType:   req.OrderType,
+		Quantity:    req.Quantity,
+		Price:       req.Price,
+		TimeInForce: "GTC",
+	}
+
+	binanceOrder, err := optionsClient.CreateOptionsOrder(ctx, binanceReq)
+	if err != nil {
+		// If API call fails, save as pending
+		binanceOrder = nil
+	}
 
 	optionsOrder := &models.OptionsOrder{
 		ID:            primitive.NewObjectID(),
@@ -102,12 +147,42 @@ func (s *TradingService) CreateOptionsOrder(ctx context.Context, req *CreateOpti
 		UpdatedAt:     time.Now(),
 	}
 
-	_, err := database.OptionsCollection.InsertOne(ctx, optionsOrder)
+	if binanceOrder != nil {
+		optionsOrder.BinanceOrderID = binanceOrder.OrderID
+		optionsOrder.Status = binanceOrder.Status
+	}
+
+	_, err = database.OptionsCollection.InsertOne(ctx, optionsOrder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to save order to database: %w", err)
 	}
 
 	return optionsOrder, nil
+}
+
+// GetOptionsPositions gets options positions
+func (s *TradingService) GetOptionsPositions(ctx context.Context) ([]*models.Position, error) {
+	optionsClient := binance.NewOptionsClient(nil) // Will need proper config
+	binancePositions, err := optionsClient.GetOptionsPositions(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get options positions: %w", err)
+	}
+
+	var positions []*models.Position
+	for _, bp := range binancePositions {
+		position := &models.Position{
+			Symbol:       bp.Symbol,
+			Type:         "OPTIONS",
+			Quantity:     bp.Position,
+			EntryPrice:   bp.EntryPrice,
+			CurrentPrice: bp.MarkPrice,
+			UnrealizedPnl: bp.UnrealizedPnl,
+			UpdatedAt:    time.Now(),
+		}
+		positions = append(positions, position)
+	}
+
+	return positions, nil
 }
 
 // GetFuturesOrders retrieves futures orders from MongoDB

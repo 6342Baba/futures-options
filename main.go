@@ -38,11 +38,8 @@ func main() {
 	// Load configuration
 	cfg := config.Load()
 
-	// Validate configuration
-	if cfg.BinanceAPIKey == "" || cfg.BinanceSecretKey == "" {
-		log.Println("Warning: Binance API keys not set. Some features may not work.")
-		log.Println("Please set BINANCE_API_KEY and BINANCE_SECRET_KEY in your .env file")
-	}
+	// Note: API keys will be loaded from database first (if saved via POST /api/credentials),
+	// then fall back to environment variables if not found in database
 
 	// Connect to MongoDB
 	if err := database.Connect(cfg); err != nil {
@@ -58,30 +55,57 @@ func main() {
 	// Initialize Binance client
 	binanceClient := binance.NewClient(cfg)
 	
-	// Try to load API keys from environment first
-	if cfg.BinanceAPIKey != "" && cfg.BinanceSecretKey != "" {
-		binanceClient.SetAPIKeys(cfg.BinanceAPIKey, cfg.BinanceSecretKey)
-		log.Println("Using API keys from environment variables")
-	} else {
-		// Try to load from database
-		tradingService := services.NewTradingService(binanceClient)
-		credentials, err := tradingService.GetActiveAPICredentials(context.Background())
-		if err == nil {
-			binanceClient.SetAPIKeys(credentials.APIKey, credentials.SecretKey)
-			log.Println("Using API keys from database")
+	// Create temporary service to check database for credentials
+	tempService := services.NewTradingService(binanceClient)
+	
+	// Priority: Database first, then environment variables
+	var apiKey, secretKey string
+	var keySource string
+	
+	// Try to load from database first (credentials saved via API)
+	credentials, err := tempService.GetActiveAPICredentials(context.Background())
+	if err == nil && credentials.APIKey != "" && credentials.SecretKey != "" {
+		apiKey = credentials.APIKey
+		secretKey = credentials.SecretKey
+		keySource = "database"
+		log.Printf("✓ Using API keys from database (saved via POST /api/credentials)")
+		// Show masked API key for security
+		keyLen := len(credentials.APIKey)
+		prefix := ""
+		suffix := ""
+		if keyLen > 8 {
+			prefix = credentials.APIKey[:8]
 		} else {
-			log.Println("No API keys found. Please add API keys via POST /api/credentials")
+			prefix = credentials.APIKey
 		}
+		if keyLen > 4 {
+			suffix = credentials.APIKey[keyLen-4:]
+		}
+		if keyLen > 12 {
+			log.Printf("  API Key: %s...%s (testnet: %v)", prefix, suffix, credentials.IsTestnet)
+		} else {
+			log.Printf("  API Key: [configured] (testnet: %v)", credentials.IsTestnet)
+		}
+	} else if cfg.BinanceAPIKey != "" && cfg.BinanceSecretKey != "" {
+		// Fall back to environment variables
+		apiKey = cfg.BinanceAPIKey
+		secretKey = cfg.BinanceSecretKey
+		keySource = "environment"
+		log.Println("✓ Using API keys from environment variables")
+	} else {
+		log.Println("⚠ Warning: No API keys found in database or environment")
+		log.Println("  Please add API keys via: POST /api/credentials")
+		log.Println("  Or set BINANCE_API_KEY and BINANCE_SECRET_KEY in .env file")
+	}
+	
+	// Set API keys if we found them
+	if apiKey != "" && secretKey != "" {
+		binanceClient.SetAPIKeys(apiKey, secretKey)
+		log.Printf("✓ Binance client configured with API keys from %s", keySource)
 	}
 
-	// Initialize services
-	var tradingService *services.TradingService
-	if cfg.BinanceAPIKey == "" || cfg.BinanceSecretKey == "" {
-		// Reuse the service created above for loading credentials
-		tradingService = services.NewTradingService(binanceClient)
-	} else {
-		tradingService = services.NewTradingService(binanceClient)
-	}
+	// Initialize services (reuse the temp service)
+	tradingService := tempService
 
 	// Initialize handlers
 	h := handlers.NewHandlers(tradingService)
