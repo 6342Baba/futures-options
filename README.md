@@ -9,6 +9,9 @@ A Go-based trading system for Binance Futures and Options with MongoDB integrati
 - **MongoDB Integration**: Persistent storage of orders and positions
 - **REST API**: HTTP endpoints for trading operations
 - **Position Sync**: Sync positions from Binance to local database
+- **API Credentials Management**: Store and manage Binance API keys via API
+- **Swagger Documentation**: Interactive API documentation
+- **Auto-reload Development**: Hot-reload on file changes with `make dev`
 
 ## Prerequisites
 
@@ -47,7 +50,7 @@ BINANCE_TESTNET=true
 BINANCE_FUTURES_TESTNET_URL=https://testnet.binancefuture.com
 MONGODB_URI=mongodb://localhost:27017
 MONGODB_DATABASE=futures_options_db
-PORT=8080
+PORT=9090
 ```
 
 ### 4. Start MongoDB
@@ -64,11 +67,31 @@ mongod
 
 ### 5. Run the Application
 
+**Development Mode (with auto-reload):**
+```bash
+make dev
+```
+
+**Or run normally:**
 ```bash
 go run main.go
 ```
 
-The server will start on `http://localhost:8080` (or your configured PORT).
+**Or build and run:**
+```bash
+make build
+./bin/futures-options
+```
+
+The server will start on `http://localhost:9090` (or your configured PORT).
+
+### 6. Generate Swagger Documentation
+
+```bash
+make swagger
+```
+
+Then visit `http://localhost:9090/swagger/index.html` to view the interactive API documentation.
 
 ## API Endpoints
 
@@ -76,6 +99,34 @@ The server will start on `http://localhost:8080` (or your configured PORT).
 
 ```bash
 GET /health
+```
+
+### Swagger Documentation
+
+```bash
+GET /swagger/index.html
+```
+
+Visit `http://localhost:9090/swagger/index.html` in your browser for interactive API documentation.
+
+### API Credentials Management
+
+**Save API Credentials**
+```bash
+POST /api/credentials
+Content-Type: application/json
+
+{
+  "api_key": "your_api_key",
+  "secret_key": "your_secret_key",
+  "is_active": true,
+  "is_testnet": true
+}
+```
+
+**Get API Credentials**
+```bash
+GET /api/credentials?active_only=true
 ```
 
 ### Futures Orders
@@ -140,7 +191,7 @@ POST /api/positions/sync
 ### Create a Futures Market Order
 
 ```bash
-curl -X POST http://localhost:8080/api/futures/order \
+curl -X POST http://localhost:9090/api/futures/order \
   -H "Content-Type: application/json" \
   -d '{
     "symbol": "BTCUSDT",
@@ -155,13 +206,44 @@ curl -X POST http://localhost:8080/api/futures/order \
 ### Get All Futures Orders
 
 ```bash
-curl http://localhost:8080/api/futures/orders
+curl http://localhost:9090/api/futures/orders
 ```
 
 ### Sync Positions from Binance
 
 ```bash
-curl -X POST http://localhost:8080/api/positions/sync
+curl -X POST http://localhost:9090/api/positions/sync
+```
+
+## Development
+
+### Make Commands
+
+- `make install` - Install all dependencies (air, swag, etc.)
+- `make dev` - Run in development mode with auto-reload
+- `make build` - Build the application
+- `make run` - Run the application normally
+- `make swagger` - Generate Swagger documentation
+- `make clean` - Clean build artifacts
+- `make test` - Run tests
+- `make fmt` - Format code
+
+### Auto-reload Development
+
+The project uses [Air](https://github.com/cosmtrek/air) for hot-reloading during development. Simply run:
+
+```bash
+make dev
+```
+
+The server will automatically restart when you make changes to any `.go` files.
+
+### Swagger Documentation
+
+After generating the Swagger docs with `make swagger`, you can access the interactive documentation at:
+
+```
+http://localhost:9090/swagger/index.html
 ```
 
 ## Project Structure
@@ -181,6 +263,11 @@ futures-options/
 │   └── trading_service.go # Business logic
 ├── handlers/
 │   └── handlers.go        # HTTP handlers
+├── examples/
+│   └── example_requests.sh # Example API requests
+├── docs/                   # Swagger documentation (generated)
+├── Makefile                # Make commands
+├── .air.toml              # Air configuration
 ├── go.mod
 ├── go.sum
 └── README.md

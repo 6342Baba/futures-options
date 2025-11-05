@@ -81,3 +81,14 @@ type Position struct {
 	UpdatedAt     time.Time          `bson:"updated_at" json:"updated_at"`
 }
 
+// APICredentials represents Binance API credentials stored in database
+type APICredentials struct {
+	ID            primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	APIKey        string             `bson:"api_key" json:"api_key"`
+	SecretKey     string             `bson:"secret_key" json:"secret_key"`
+	IsActive      bool               `bson:"is_active" json:"is_active"`
+	IsTestnet     bool               `bson:"is_testnet" json:"is_testnet"`
+	CreatedAt     time.Time          `bson:"created_at" json:"created_at"`
+	UpdatedAt     time.Time          `bson:"updated_at" json:"updated_at"`
+}
+

@@ -7,6 +7,7 @@ import (
 
 	"futures-options/config"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -17,6 +18,7 @@ var (
 	FuturesCollection *mongo.Collection
 	OptionsCollection *mongo.Collection
 	PositionsCollection *mongo.Collection
+	APICredentialsCollection *mongo.Collection
 )
 
 func Connect(cfg *config.Config) error {
@@ -41,6 +43,7 @@ func Connect(cfg *config.Config) error {
 	FuturesCollection = DB.Collection("futures_orders")
 	OptionsCollection = DB.Collection("options_orders")
 	PositionsCollection = DB.Collection("positions")
+	APICredentialsCollection = DB.Collection("api_credentials")
 
 	fmt.Println("Connected to MongoDB successfully!")
 	return nil
@@ -59,20 +62,26 @@ func CreateIndexes() error {
 
 	// Futures orders indexes
 	futuresIndexes := []mongo.IndexModel{
-		{Keys: map[string]interface{}{"symbol": 1, "created_at": -1}},
-		{Keys: map[string]interface{}{"binance_order_id": 1}, Options: options.Index().SetUnique(true)},
+		{Keys: bson.D{{Key: "symbol", Value: 1}, {Key: "created_at", Value: -1}}},
+		{Keys: bson.D{{Key: "binance_order_id", Value: 1}}, Options: options.Index().SetUnique(true)},
 	}
 
 	// Options orders indexes
 	optionsIndexes := []mongo.IndexModel{
-		{Keys: map[string]interface{}{"symbol": 1, "created_at": -1}},
-		{Keys: map[string]interface{}{"binance_order_id": 1}, Options: options.Index().SetUnique(true)},
+		{Keys: bson.D{{Key: "symbol", Value: 1}, {Key: "created_at", Value: -1}}},
+		{Keys: bson.D{{Key: "binance_order_id", Value: 1}}, Options: options.Index().SetUnique(true)},
 	}
 
 	// Positions indexes
 	positionsIndexes := []mongo.IndexModel{
-		{Keys: map[string]interface{}{"symbol": 1, "type": 1}},
-		{Keys: map[string]interface{}{"created_at": -1}},
+		{Keys: bson.D{{Key: "symbol", Value: 1}, {Key: "type", Value: 1}}},
+		{Keys: bson.D{{Key: "created_at", Value: -1}}},
+	}
+
+	// API Credentials indexes
+	credentialsIndexes := []mongo.IndexModel{
+		{Keys: bson.D{{Key: "is_active", Value: 1}}},
+		{Keys: bson.D{{Key: "api_key", Value: 1}}, Options: options.Index().SetUnique(true)},
 	}
 
 	_, err := FuturesCollection.Indexes().CreateMany(ctx, futuresIndexes)
@@ -88,6 +97,11 @@ func CreateIndexes() error {
 	_, err = PositionsCollection.Indexes().CreateMany(ctx, positionsIndexes)
 	if err != nil {
 		return fmt.Errorf("failed to create positions indexes: %w", err)
+	}
+
+	_, err = APICredentialsCollection.Indexes().CreateMany(ctx, credentialsIndexes)
+	if err != nil {
+		return fmt.Errorf("failed to create credentials indexes: %w", err)
 	}
 
 	fmt.Println("Indexes created successfully!")

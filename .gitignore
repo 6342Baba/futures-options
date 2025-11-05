@@ -17,6 +17,13 @@ vendor/
 # Go workspace file
 go.work
 
+# Air live reload
+tmp/
+build-errors.log
+
+# Swagger docs
+docs/
+
 # Environment variables
 .env
 

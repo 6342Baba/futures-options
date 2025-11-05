@@ -12,9 +12,27 @@ import (
 	"futures-options/binance"
 	"futures-options/config"
 	"futures-options/database"
+	_ "futures-options/docs" // Swagger docs (blank import to ensure docs package is linked)
 	"futures-options/handlers"
 	"futures-options/services"
 )
+
+// @title           Binance Futures & Options Trading API
+// @version         1.0
+// @description     A REST API for trading Binance Futures and Options using testnet/demo accounts
+// @termsOfService  http://swagger.io/terms/
+
+// @contact.name   API Support
+// @contact.url    http://www.example.com/support
+// @contact.email  support@example.com
+
+// @license.name  Apache 2.0
+// @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host      localhost:9090
+// @BasePath  /
+
+// @schemes http https
 
 func main() {
 	// Load configuration
@@ -39,12 +57,31 @@ func main() {
 
 	// Initialize Binance client
 	binanceClient := binance.NewClient(cfg)
+	
+	// Try to load API keys from environment first
 	if cfg.BinanceAPIKey != "" && cfg.BinanceSecretKey != "" {
 		binanceClient.SetAPIKeys(cfg.BinanceAPIKey, cfg.BinanceSecretKey)
+		log.Println("Using API keys from environment variables")
+	} else {
+		// Try to load from database
+		tradingService := services.NewTradingService(binanceClient)
+		credentials, err := tradingService.GetActiveAPICredentials(context.Background())
+		if err == nil {
+			binanceClient.SetAPIKeys(credentials.APIKey, credentials.SecretKey)
+			log.Println("Using API keys from database")
+		} else {
+			log.Println("No API keys found. Please add API keys via POST /api/credentials")
+		}
 	}
 
 	// Initialize services
-	tradingService := services.NewTradingService(binanceClient)
+	var tradingService *services.TradingService
+	if cfg.BinanceAPIKey == "" || cfg.BinanceSecretKey == "" {
+		// Reuse the service created above for loading credentials
+		tradingService = services.NewTradingService(binanceClient)
+	} else {
+		tradingService = services.NewTradingService(binanceClient)
+	}
 
 	// Initialize handlers
 	h := handlers.NewHandlers(tradingService)

@@ -1,12 +1,27 @@
 #!/bin/bash
 
 # Example API requests for the Futures & Options Trading System
-# Make sure the server is running on localhost:8080
+# Make sure the server is running on localhost:9090
 
-BASE_URL="http://localhost:8080"
+BASE_URL="http://localhost:9090"
 
 echo "=== Health Check ==="
 curl -X GET "${BASE_URL}/health"
+echo -e "\n\n"
+
+echo "=== Save API Credentials ==="
+curl -X POST "${BASE_URL}/api/credentials" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "api_key": "your_testnet_api_key",
+    "secret_key": "your_testnet_secret_key",
+    "is_active": true,
+    "is_testnet": true
+  }'
+echo -e "\n\n"
+
+echo "=== Get API Credentials ==="
+curl -X GET "${BASE_URL}/api/credentials?active_only=true"
 echo -e "\n\n"
 
 echo "=== Create Futures Market Order (BUY) ==="

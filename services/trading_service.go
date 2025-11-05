@@ -13,6 +13,7 @@ import (
 	"github.com/adshao/go-binance/v2/futures"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -236,5 +237,89 @@ type CreateOptionsOrderRequest struct {
 	StrikePrice float64  `json:"strike_price"`
 	ExpiryDate time.Time `json:"expiry_date"`
 	OptionType string    `json:"option_type"` // CALL or PUT
+}
+
+// SaveAPICredentials saves API credentials to MongoDB
+func (s *TradingService) SaveAPICredentials(ctx context.Context, req *SaveAPICredentialsRequest) (*models.APICredentials, error) {
+	// Check if API key already exists
+	filter := bson.M{"api_key": req.APIKey}
+	existing := &models.APICredentials{}
+	err := database.APICredentialsCollection.FindOne(ctx, filter).Decode(existing)
+	
+	if err == nil || err == mongo.ErrNoDocuments {
+		if err == mongo.ErrNoDocuments {
+			// Create new credentials
+			credentials := &models.APICredentials{
+				ID:        primitive.NewObjectID(),
+				APIKey:    req.APIKey,
+				SecretKey: req.SecretKey,
+				IsActive:  req.IsActive,
+				IsTestnet: req.IsTestnet,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}
+
+			_, err = database.APICredentialsCollection.InsertOne(ctx, credentials)
+			if err != nil {
+				return nil, fmt.Errorf("failed to save API credentials: %w", err)
+			}
+
+			return credentials, nil
+		}
+		// Update existing credentials
+		existing.SecretKey = req.SecretKey
+		existing.IsActive = req.IsActive
+		existing.IsTestnet = req.IsTestnet
+		existing.UpdatedAt = time.Now()
+
+		update := bson.M{"$set": existing}
+		_, err = database.APICredentialsCollection.UpdateOne(ctx, filter, update)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update API credentials: %w", err)
+		}
+		return existing, nil
+	}
+	
+	// If we got here, there was an unexpected error
+	return nil, fmt.Errorf("unexpected error checking for existing credentials: %w", err)
+}
+
+// GetAPICredentials retrieves API credentials from MongoDB
+func (s *TradingService) GetAPICredentials(ctx context.Context, activeOnly bool) ([]*models.APICredentials, error) {
+	filter := bson.M{}
+	if activeOnly {
+		filter["is_active"] = true
+	}
+
+	cursor, err := database.APICredentialsCollection.Find(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query API credentials: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var credentials []*models.APICredentials
+	if err = cursor.All(ctx, &credentials); err != nil {
+		return nil, fmt.Errorf("failed to decode API credentials: %w", err)
+	}
+
+	return credentials, nil
+}
+
+// GetActiveAPICredentials gets the first active API credentials
+func (s *TradingService) GetActiveAPICredentials(ctx context.Context) (*models.APICredentials, error) {
+	filter := bson.M{"is_active": true}
+	credentials := &models.APICredentials{}
+	err := database.APICredentialsCollection.FindOne(ctx, filter).Decode(credentials)
+	if err != nil {
+		return nil, fmt.Errorf("no active API credentials found: %w", err)
+	}
+	return credentials, nil
+}
+
+type SaveAPICredentialsRequest struct {
+	APIKey    string `json:"api_key"`
+	SecretKey string `json:"secret_key"`
+	IsActive  bool   `json:"is_active"`
+	IsTestnet bool   `json:"is_testnet"`
 }
 

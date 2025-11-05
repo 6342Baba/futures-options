@@ -8,6 +8,7 @@ import (
 	"futures-options/services"
 
 	"github.com/gorilla/mux"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 type Handlers struct {
@@ -21,6 +22,16 @@ func NewHandlers(tradingService *services.TradingService) *Handlers {
 }
 
 // CreateFuturesOrder handles POST /api/futures/order
+// @Summary      Create a futures order
+// @Description  Create a new futures trading order on Binance
+// @Tags         futures
+// @Accept       json
+// @Produce      json
+// @Param        order  body      services.CreateFuturesOrderRequest  true  "Futures Order Request"
+// @Success      200    {object}  models.FuturesOrder
+// @Failure      400    {string}  string  "Bad Request"
+// @Failure      500    {string}  string  "Internal Server Error"
+// @Router       /api/futures/order [post]
 func (h *Handlers) CreateFuturesOrder(w http.ResponseWriter, r *http.Request) {
 	var req services.CreateFuturesOrderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -39,6 +50,16 @@ func (h *Handlers) CreateFuturesOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateOptionsOrder handles POST /api/options/order
+// @Summary      Create an options order
+// @Description  Create a new options trading order
+// @Tags         options
+// @Accept       json
+// @Produce      json
+// @Param        order  body      services.CreateOptionsOrderRequest  true  "Options Order Request"
+// @Success      200    {object}  models.OptionsOrder
+// @Failure      400    {string}  string  "Bad Request"
+// @Failure      500    {string}  string  "Internal Server Error"
+// @Router       /api/options/order [post]
 func (h *Handlers) CreateOptionsOrder(w http.ResponseWriter, r *http.Request) {
 	var req services.CreateOptionsOrderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -57,6 +78,14 @@ func (h *Handlers) CreateOptionsOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetFuturesOrders handles GET /api/futures/orders
+// @Summary      Get futures orders
+// @Description  Retrieve all futures orders, optionally filtered by symbol
+// @Tags         futures
+// @Produce      json
+// @Param        symbol  query     string  false  "Filter by symbol (e.g., BTCUSDT)"
+// @Success      200     {array}   models.FuturesOrder
+// @Failure      500     {string}  string  "Internal Server Error"
+// @Router       /api/futures/orders [get]
 func (h *Handlers) GetFuturesOrders(w http.ResponseWriter, r *http.Request) {
 	symbol := r.URL.Query().Get("symbol")
 
@@ -71,6 +100,14 @@ func (h *Handlers) GetFuturesOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetOptionsOrders handles GET /api/options/orders
+// @Summary      Get options orders
+// @Description  Retrieve all options orders, optionally filtered by symbol
+// @Tags         options
+// @Produce      json
+// @Param        symbol  query     string  false  "Filter by symbol"
+// @Success      200     {array}   models.OptionsOrder
+// @Failure      500     {string}  string  "Internal Server Error"
+// @Router       /api/options/orders [get]
 func (h *Handlers) GetOptionsOrders(w http.ResponseWriter, r *http.Request) {
 	symbol := r.URL.Query().Get("symbol")
 
@@ -85,6 +122,14 @@ func (h *Handlers) GetOptionsOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetPositions handles GET /api/positions
+// @Summary      Get positions
+// @Description  Retrieve all positions, optionally filtered by type (FUTURES or OPTIONS)
+// @Tags         positions
+// @Produce      json
+// @Param        type  query     string  false  "Filter by position type (FUTURES or OPTIONS)"
+// @Success      200   {array}   models.Position
+// @Failure      500   {string}  string  "Internal Server Error"
+// @Router       /api/positions [get]
 func (h *Handlers) GetPositions(w http.ResponseWriter, r *http.Request) {
 	positionType := r.URL.Query().Get("type")
 
@@ -99,6 +144,13 @@ func (h *Handlers) GetPositions(w http.ResponseWriter, r *http.Request) {
 }
 
 // SyncPositions handles POST /api/positions/sync
+// @Summary      Sync positions from Binance
+// @Description  Sync current positions from Binance to local database
+// @Tags         positions
+// @Produce      json
+// @Success      200   {object}  map[string]string
+// @Failure      500   {string}  string  "Internal Server Error"
+// @Router       /api/positions/sync [post]
 func (h *Handlers) SyncPositions(w http.ResponseWriter, r *http.Request) {
 	err := h.tradingService.SyncPositionsFromBinance(r.Context())
 	if err != nil {
@@ -110,7 +162,63 @@ func (h *Handlers) SyncPositions(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"message": "Positions synced successfully"})
 }
 
+// SaveAPICredentials handles POST /api/credentials
+// @Summary      Save API credentials
+// @Description  Save Binance API credentials to the database
+// @Tags         credentials
+// @Accept       json
+// @Produce      json
+// @Param        credentials  body      services.SaveAPICredentialsRequest  true  "API Credentials"
+// @Success      200          {object}  models.APICredentials
+// @Failure      400          {string}  string  "Bad Request"
+// @Failure      500          {string}  string  "Internal Server Error"
+// @Router       /api/credentials [post]
+func (h *Handlers) SaveAPICredentials(w http.ResponseWriter, r *http.Request) {
+	var req services.SaveAPICredentialsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	credentials, err := h.tradingService.SaveAPICredentials(r.Context(), &req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(credentials)
+}
+
+// GetAPICredentials handles GET /api/credentials
+// @Summary      Get API credentials
+// @Description  Retrieve stored API credentials, optionally filtered to active only
+// @Tags         credentials
+// @Produce      json
+// @Param        active_only  query     bool    false  "Filter to active credentials only"
+// @Success      200          {array}   models.APICredentials
+// @Failure      500          {string}  string  "Internal Server Error"
+// @Router       /api/credentials [get]
+func (h *Handlers) GetAPICredentials(w http.ResponseWriter, r *http.Request) {
+	activeOnly := r.URL.Query().Get("active_only") == "true"
+
+	credentials, err := h.tradingService.GetAPICredentials(r.Context(), activeOnly)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(credentials)
+}
+
 // HealthCheck handles GET /health
+// @Summary      Health check
+// @Description  Check if the API server is running
+// @Tags         health
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Router       /health [get]
 func (h *Handlers) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -121,6 +229,9 @@ func (h *Handlers) HealthCheck(w http.ResponseWriter, r *http.Request) {
 
 func SetupRoutes(h *Handlers) *mux.Router {
 	router := mux.NewRouter()
+
+	// Swagger documentation
+	router.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
 
 	// Health check
 	router.HandleFunc("/health", h.HealthCheck).Methods("GET")
@@ -141,6 +252,10 @@ func SetupRoutes(h *Handlers) *mux.Router {
 	// Positions routes
 	api.HandleFunc("/positions", h.GetPositions).Methods("GET")
 	api.HandleFunc("/positions/sync", h.SyncPositions).Methods("POST")
+
+	// API Credentials routes
+	api.HandleFunc("/credentials", h.SaveAPICredentials).Methods("POST")
+	api.HandleFunc("/credentials", h.GetAPICredentials).Methods("GET")
 
 	return router
 }
