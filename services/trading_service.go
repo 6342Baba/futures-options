@@ -35,7 +35,19 @@ func (s *TradingService) GetAccountStatusWS(ctx context.Context) (interface{}, e
     defer ws.Close()
 
     var result interface{}
-    if err := ws.SendSignedRequest(ctx, fmt.Sprintf("status-%d", time.Now().UnixMilli()), "account.status", nil, &result); err != nil {
+    params := map[string]interface{}{}
+    apiKey := s.binanceClient.Config.BinanceAPIKey
+    if apiKey == "" {
+        // Fallback to DB-stored active credentials
+        var cred struct{ APIKey string `bson:"api_key"` }
+        _ = database.APICredentialsCollection.FindOne(ctx, bson.M{"is_active": true}).Decode(&cred)
+        apiKey = cred.APIKey
+    }
+    if apiKey == "" {
+        return nil, fmt.Errorf("missing apiKey: set BINANCE_API_KEY or save active credentials via /api/credentials")
+    }
+    params["apiKey"] = apiKey
+    if err := ws.SendSignedRequest(ctx, fmt.Sprintf("status-%d", time.Now().UnixMilli()), "account.status", params, &result); err != nil {
         return nil, err
     }
     return result, nil
@@ -48,7 +60,18 @@ func (s *TradingService) GetAccountBalanceWS(ctx context.Context) (interface{}, 
     defer ws.Close()
 
     var result interface{}
-    if err := ws.SendSignedRequest(ctx, fmt.Sprintf("bal-%d", time.Now().UnixMilli()), "account.balance", nil, &result); err != nil {
+    params := map[string]interface{}{}
+    apiKey := s.binanceClient.Config.BinanceAPIKey
+    if apiKey == "" {
+        var cred struct{ APIKey string `bson:"api_key"` }
+        _ = database.APICredentialsCollection.FindOne(ctx, bson.M{"is_active": true}).Decode(&cred)
+        apiKey = cred.APIKey
+    }
+    if apiKey == "" {
+        return nil, fmt.Errorf("missing apiKey: set BINANCE_API_KEY or save active credentials via /api/credentials")
+    }
+    params["apiKey"] = apiKey
+    if err := ws.SendSignedRequest(ctx, fmt.Sprintf("bal-%d", time.Now().UnixMilli()), "account.balance", params, &result); err != nil {
         return nil, err
     }
     return result, nil

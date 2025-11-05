@@ -228,7 +228,7 @@ func (w *WSAPIClient) SendSignedRequest(ctx context.Context, id interface{}, met
     }
     if _, ok := params["timestamp"]; !ok {
         ts := getServerTimeMs(w.cfg)
-        ts = (ts / 1000) * 1000
+        // ts = (ts / 1000) * 1000
         params["timestamp"] = ts
     }
     // (optional but good) add recvWindow
@@ -244,7 +244,7 @@ func (w *WSAPIClient) SendSignedRequest(ctx context.Context, id interface{}, met
 
     sig := ed25519.Sign(priv, []byte(payload))
     params["signature"] = base64.StdEncoding.EncodeToString(sig)
-
+    log.Printf("Signature params: %v", params)
     return w.SendRequest(ctx, id, method, params, out)
 }
 
